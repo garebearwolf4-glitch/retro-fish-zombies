@@ -293,6 +293,49 @@
     buy:   function(){ tone(520, 880, 0.10, 'triangle', 0.06); },
     dead:  function(){ tone(240, 40, 0.85, 'sawtooth', 0.08); }
   };
+  
+  /* ---------- background music: looping track ---------- */
+var MUSIC = (function(){
+  var gain = null, source = null, buffer = null, ready = false, wantPlaying = false;
+  function ctx(){
+    if (!ac){ var AC = window.AudioContext || window.webkitAudioContext; if(!AC) return null; ac = new AC(); }
+    return ac;
+  }
+  function load(){
+    var c = ctx(); if (!c || ready) return;
+    fetch('audio/nervous-battle_music_loop.ogg')
+      .then(function(r){ if (!r.ok) throw new Error('ogg missing'); return r.arrayBuffer(); })
+      .catch(function(){ return fetch('audio/nervous-battle_music_loop.mp3').then(function(r){ return r.arrayBuffer(); }); })
+      .then(function(data){ return c.decodeAudioData(data); })
+      .then(function(buf){ buffer = buf; ready = true; if (wantPlaying) play(); })
+      .catch(function(e){ console.warn('music load failed', e); });
+  }
+  function play(){
+    var c = ctx(); if (!c) return;
+    wantPlaying = true;
+    if (!ready || !buffer) { load(); return; }
+    if (source) return; // already playing
+    if (c.state === 'suspended') c.resume();
+    source = c.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    gain = c.createGain();
+    gain.gain.value = muted ? 0 : 0.5;
+    source.connect(gain); gain.connect(c.destination);
+    source.start(0);
+  }
+  function stop(){
+    wantPlaying = false;
+    if (source){ try { source.stop(); } catch(e){} source.disconnect(); source = null; }
+  }
+  function setMuted(m){ if (gain) gain.gain.value = m ? 0 : (paused ? 0 : 0.5); }
+  var isPaused = false;
+  function setPaused(p){
+    isPaused = p;
+    if (gain) gain.gain.value = (muted || p) ? 0 : 0.5;
+  }
+  return { play: play, stop: stop, setMuted: setMuted, setPaused: setPaused };
+})();
 
   /* ---------- the upgrade rack at the Bone Exchange ---------- */
   var UPG = [
@@ -555,7 +598,7 @@
     var k = e.key.toLowerCase();
     keys[k] = true;
     if ([' ','arrowup','arrowdown','arrowleft','arrowright'].indexOf(k) >= 0 && state === 'playing') e.preventDefault();
-    if (k === 'p' && state === 'playing'){ paused = !paused; el.say.textContent = paused ? 'Paused.' : 'Playing.'; }
+       if (k === 'p' && state === 'playing'){ paused = !paused; MUSIC.setPaused(paused); el.say.textContent = paused ? 'Paused.' : 'Playing.'; }
   });
   window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function(){ keys = {}; firing = false; stick = null; });
@@ -1079,6 +1122,7 @@
 
   /* ---------- buttons ---------- */
   document.getElementById('startBtn').addEventListener('click', function(){
+     MUSIC.play();
     el.title.hidden = true;
     startWave(1);
   });
@@ -1099,6 +1143,7 @@
   });
   el.muteBtn.addEventListener('click', function(){
     muted = !muted;
+    MUSIC.setMuted(muted);
     el.muteBtn.textContent = 'Sound: ' + (muted ? 'off' : 'on');
     el.muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
   });
