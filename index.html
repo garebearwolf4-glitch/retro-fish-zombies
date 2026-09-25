@@ -223,6 +223,13 @@
       <button class="tbtn" id="muteBtn" aria-pressed="false">Sound: on</button>
 <label>Music: <input type="number" id="musicVol" min="0" max="100" value="50" style="width:50px"></label>
 <label>SFX: <input type="number" id="sfxVol" min="0" max="100" value="100" style="width:50px"></label>
+      <label>Track:
+  <select id="trackSelect">
+    <option value="nervous-battle">Nervous Battle</option>
+    <option value="brave-battle">Brave Battle</option>
+    <option value="spooky-cave">Spooky Cave</option>
+  </select>
+</label>
       <button class="tbtn" id="resetBtn">Restart run</button>
     </div>
   </div>
@@ -296,31 +303,42 @@
     dead:  function(){ tone(240, 40, 0.85, 'sawtooth', 0.08); }
   };
   
-/* ---------- background music: looping track ---------- */
+/* ---------- background music: looping, track-switchable ---------- */
+var TRACKS = {
+  'nervous-battle': 'audio/nervous-battle_music_loop',
+  'brave-battle': 'audio/brave-battle_music_loop',
+  'spooky-cave': 'audio/spooky-cave_music_loop'
+};
+
 var MUSIC = (function(){
   var gain = null, source = null, buffer = null, ready = false, wantPlaying = false;
-  var vol = 0.5, isPaused = false;
+  var vol = 0.5, isPaused = false, currentTrack = 'nervous-battle', loadToken = 0;
   function ctx(){
     if (!ac){ var AC = window.AudioContext || window.webkitAudioContext; if(!AC) return null; ac = new AC(); }
     return ac;
   }
   function load(){
-    var c = ctx(); if (!c || ready) return;
-    fetch('audio/nervous-battle_music_loop.ogg')
+    var c = ctx(); if (!c) return;
+    ready = false; buffer = null;
+    var myToken = ++loadToken;
+    var base = TRACKS[currentTrack];
+    fetch(base + '.ogg')
       .then(function(r){ if (!r.ok) throw new Error('ogg missing'); return r.arrayBuffer(); })
-      .catch(function(){ return fetch('audio/nervous-battle_music_loop.mp3').then(function(r){ return r.arrayBuffer(); }); })
+      .catch(function(){ return fetch(base + '.mp3').then(function(r){ return r.arrayBuffer(); }); })
       .then(function(data){ return c.decodeAudioData(data); })
-      .then(function(buf){ buffer = buf; ready = true; if (wantPlaying) play(); })
+      .then(function(buf){
+        if (myToken !== loadToken) return;
+        buffer = buf; ready = true;
+        if (wantPlaying) startSource();
+      })
       .catch(function(e){ console.warn('music load failed', e); });
   }
   function apply(){
     if (gain) gain.gain.value = (muted || isPaused) ? 0 : vol;
   }
-  function play(){
-    var c = ctx(); if (!c) return;
-    wantPlaying = true;
-    if (!ready || !buffer) { load(); return; }
-    if (source) return;
+  function startSource(){
+    var c = ctx(); if (!c || !buffer) return;
+    if (source){ try { source.stop(); } catch(e){} source.disconnect(); source = null; }
     if (c.state === 'suspended') c.resume();
     source = c.createBufferSource();
     source.buffer = buffer;
@@ -330,6 +348,11 @@ var MUSIC = (function(){
     source.start(0);
     apply();
   }
+  function play(){
+    wantPlaying = true;
+    if (!ready || !buffer) { load(); return; }
+    startSource();
+  }
   function stop(){
     wantPlaying = false;
     if (source){ try { source.stop(); } catch(e){} source.disconnect(); source = null; }
@@ -337,14 +360,27 @@ var MUSIC = (function(){
   function setMuted(m){ apply(); }
   function setPaused(p){ isPaused = p; apply(); }
   function setVolume(v){ vol = Math.max(0, Math.min(1, v)); apply(); }
-  return { play: play, stop: stop, setMuted: setMuted, setPaused: setPaused, setVolume: setVolume };
+  function setTrack(name){
+    if (!TRACKS[name] || name === currentTrack) return;
+    currentTrack = name;
+    load();
+  }
+  return { play: play, stop: stop, setMuted: setMuted, setPaused: setPaused, setVolume: setVolume, setTrack: setTrack };
 })();
-document.getElementById('musicVol').addEventListener('input', function(e){
+  
+  document.getElementById('musicVol').addEventListener('input', function(e){
   MUSIC.setVolume(e.target.value / 100);
-});  
-  document.getElementById('sfxVol').addEventListener('input', function(e){
+});
+document.getElementById('sfxVol').addEventListener('input', function(e){
   sfxVol = e.target.value / 100;
 });
+document.getElementById('trackSelect').addEventListener('change', function(e){
+  MUSIC.setTrack(e.target.value);
+});
+  document.getElementById('trackSelect').addEventListener('change', function(e){
+  MUSIC.setTrack(e.target.value);
+});
+  
   /* ---------- the upgrade rack at the Bone Exchange ---------- */
   var UPG = [
     { id:'size',  nm:'Denser Hairball', fx:'+1 damage a cough',      max:8, cost:function(l){return 8 + l*7;} },
