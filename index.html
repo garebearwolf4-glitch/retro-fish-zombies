@@ -1130,6 +1130,7 @@ document.getElementById('musicVol').addEventListener('input', function(e){
 
   /* ---------- buttons ---------- */
   document.getElementById('startBtn').addEventListener('click', function(){
+    MUSIC.play();
     el.title.hidden = true;
     startWave(1);
   });
