@@ -642,7 +642,7 @@ document.getElementById('trackSelect').addEventListener('change', function(e){
     var k = e.key.toLowerCase();
     keys[k] = true;
     if ([' ','arrowup','arrowdown','arrowleft','arrowright'].indexOf(k) >= 0 && state === 'playing') e.preventDefault();
-    if (k === 'p' && state === 'playing'){ paused = !paused; el.say.textContent = paused ? 'Paused.' : 'Playing.'; }
+    if (k === 'p' && state === 'playing'){ paused = !paused; MUSIC.setPaused(paused); el.say.textContent = paused ? 'Paused.' : 'Playing.'; }
   });
   window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', function(){ keys = {}; firing = false; stick = null; });
@@ -1187,6 +1187,7 @@ document.getElementById('trackSelect').addEventListener('change', function(e){
   });
   el.muteBtn.addEventListener('click', function(){
     muted = !muted;
+    MUSIC.setMuted(muted);
     el.muteBtn.textContent = 'Sound: ' + (muted ? 'off' : 'on');
     el.muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
   });
