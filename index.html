@@ -221,6 +221,8 @@
       <span>Move <b>WASD</b> &middot; Aim <b>mouse</b> &middot; Hork <b>click / space</b> &middot; Pause <b>P</b></span>
       <span class="spacer"></span>
       <button class="tbtn" id="muteBtn" aria-pressed="false">Sound: on</button>
+<label>Music: <input type="number" id="musicVol" min="0" max="100" value="50" style="width:50px"></label>
+<label>SFX: <input type="number" id="sfxVol" min="0" max="100" value="100" style="width:50px"></label>
       <button class="tbtn" id="resetBtn">Restart run</button>
     </div>
   </div>
@@ -266,7 +268,7 @@
   function dist2(a,b){ var dx=a.x-b.x, dy=a.y-b.y; return dx*dx+dy*dy; }
 
   /* ---------- sound: a few square-wave blips ---------- */
-  var muted = false, ac = null;
+  var muted = false, ac = null, sfxVol = 1;
   function tone(f1, f2, dur, type, vol){
     if (muted) return;
     try{
@@ -277,7 +279,7 @@
       o.frequency.setValueAtTime(f1, t);
       if (f2 && f2 !== f1) o.frequency.exponentialRampToValueAtTime(Math.max(30,f2), t + dur);
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(vol || 0.05, t + 0.008);
+     g.gain.exponentialRampToValueAtTime((vol || 0.05) * sfxVol, t + 0.008);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g); g.connect(ac.destination);
       o.start(t); o.stop(t + dur + 0.02);
@@ -294,9 +296,10 @@
     dead:  function(){ tone(240, 40, 0.85, 'sawtooth', 0.08); }
   };
   
-  /* ---------- background music: looping track ---------- */
+/* ---------- background music: looping track ---------- */
 var MUSIC = (function(){
   var gain = null, source = null, buffer = null, ready = false, wantPlaying = false;
+  var vol = 0.5, isPaused = false;
   function ctx(){
     if (!ac){ var AC = window.AudioContext || window.webkitAudioContext; if(!AC) return null; ac = new AC(); }
     return ac;
@@ -310,28 +313,38 @@ var MUSIC = (function(){
       .then(function(buf){ buffer = buf; ready = true; if (wantPlaying) play(); })
       .catch(function(e){ console.warn('music load failed', e); });
   }
+  function apply(){
+    if (gain) gain.gain.value = (muted || isPaused) ? 0 : vol;
+  }
   function play(){
     var c = ctx(); if (!c) return;
     wantPlaying = true;
     if (!ready || !buffer) { load(); return; }
-    if (source) return; // already playing
+    if (source) return;
     if (c.state === 'suspended') c.resume();
     source = c.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
     gain = c.createGain();
-    gain.gain.value = muted ? 0 : 0.5;
     source.connect(gain); gain.connect(c.destination);
     source.start(0);
+    apply();
   }
   function stop(){
     wantPlaying = false;
     if (source){ try { source.stop(); } catch(e){} source.disconnect(); source = null; }
   }
-  function setMuted(m){ if (gain) gain.gain.value = m ? 0 : 0.5; }
-  return { play: play, stop: stop, setMuted: setMuted };
+  function setMuted(m){ apply(); }
+  function setPaused(p){ isPaused = p; apply(); }
+  function setVolume(v){ vol = Math.max(0, Math.min(1, v)); apply(); }
+  return { play: play, stop: stop, setMuted: setMuted, setPaused: setPaused, setVolume: setVolume };
 })();
-
+document.getElementById('musicVol').addEventListener('input', function(e){
+  MUSIC.setVolume(e.target.value / 100);
+});  
+  document.getElementById('sfxVol').addEventListener('input', function(e){
+  sfxVol = e.target.value / 100;
+});
   /* ---------- the upgrade rack at the Bone Exchange ---------- */
   var UPG = [
     { id:'size',  nm:'Denser Hairball', fx:'+1 damage a cough',      max:8, cost:function(l){return 8 + l*7;} },
